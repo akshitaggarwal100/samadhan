@@ -50,7 +50,30 @@ export default function AdminPage() {
       void loadIssues();
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    void supabase.auth.getUser().then(({ data: userData }) => {
+      if (!userData.user) return;
+      channel = supabase
+        .channel(`admin-notifications-${userData.user.id}-${crypto.randomUUID()}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `recipient_user_id=eq.${userData.user.id}`,
+          },
+          () => {
+            void loadIssues();
+          }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      window.clearTimeout(timer);
+      if (channel) void supabase.removeChannel(channel);
+    };
     // The initial load should run once; status updates call loadIssues directly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

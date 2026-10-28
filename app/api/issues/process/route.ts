@@ -257,6 +257,16 @@ export async function POST(request: Request) {
           note: "Automatically classified and assigned by AI",
         });
       if (historyError) throw historyError;
+
+      const { error: notificationError } = await adminClient
+        .from("notifications")
+        .insert({
+          recipient_user_id: assignedAdminId,
+          issue_id: body.issueId,
+          type: "assignment",
+          message: `New issue assigned: "${body.title}".`,
+        });
+      if (notificationError) throw notificationError;
     }
 
     return Response.json({ status: nextStatus, department: classification.department });
