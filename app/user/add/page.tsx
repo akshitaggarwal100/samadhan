@@ -57,6 +57,33 @@ export default function AddIssuePage() {
       return;
     }
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    let processingResponse: Response;
+    try {
+      processingResponse = await fetch("/api/issues/process", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({
+          issueId,
+          title: title.trim(),
+          description: description.trim(),
+        }),
+      });
+    } catch {
+      setError("Issue submitted, but automatic classification timed out.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!processingResponse.ok) {
+      setError("Issue submitted, but automatic classification could not run yet.");
+      setIsSubmitting(false);
+      return;
+    }
+
     router.push("/user/issues");
     router.refresh();
   };
