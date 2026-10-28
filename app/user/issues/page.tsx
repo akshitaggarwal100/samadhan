@@ -19,6 +19,7 @@ type IssueReport = {
   issue_id: string;
   submitted_title: string;
   submitted_description: string;
+  department: string | null;
   status: string;
   action_taken: string | null;
 };
@@ -35,6 +36,7 @@ export default function StudentIssuesPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [retryingReportId, setRetryingReportId] = useState("");
   const [error, setError] = useState("");
 
   async function loadReports() {
@@ -57,7 +59,7 @@ export default function StudentIssuesPage() {
       const reports = reportData ?? [];
       const issueIds = reports.map((report) => report.issue_id);
       const { data: issueData, error: issuesError } = issueIds.length
-        ? await supabase.from("issues").select("id, status, action_taken").in("id", issueIds)
+        ? await supabase.from("issues").select("id, department, status, action_taken").in("id", issueIds)
         : { data: [], error: null };
 
       if (issuesError) {
@@ -66,6 +68,7 @@ export default function StudentIssuesPage() {
         const issuesById = new Map((issueData ?? []).map((issue) => [issue.id, issue]));
         setReports(reports.map((report) => ({
           ...report,
+          department: issuesById.get(report.issue_id)?.department ?? null,
           status: issuesById.get(report.issue_id)?.status ?? "Filed",
           action_taken: issuesById.get(report.issue_id)?.action_taken ?? null,
         })) as IssueReport[]);
@@ -113,6 +116,31 @@ export default function StudentIssuesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  async function retryClassification(report: IssueReport) {
+    setError("");
+    setRetryingReportId(report.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch("/api/issues/process", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session?.access_token ?? ""}`,
+      },
+      body: JSON.stringify({
+        issueId: report.issue_id,
+        title: report.submitted_title,
+        description: report.submitted_description,
+      }),
+    });
+
+    if (!response.ok) {
+      setError("Automatic classification is still unavailable. Please try again later.");
+    } else {
+      await loadReports();
+    }
+    setRetryingReportId("");
+  }
+
   return (
     <div className="mx-auto mt-8 max-w-4xl space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -146,6 +174,7 @@ export default function StudentIssuesPage() {
                   <TableHead>Description</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Action taken</TableHead>
+                  <TableHead> </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -155,6 +184,17 @@ export default function StudentIssuesPage() {
                     <TableCell className="whitespace-normal">{report.submitted_description}</TableCell>
                     <TableCell>{report.status}</TableCell>
                     <TableCell className="whitespace-normal">{report.action_taken ?? "-"}</TableCell>
+                    <TableCell>
+                      {report.status === "Filed" && !report.department && (
+                        <Button
+                          variant="outline"
+                          disabled={retryingReportId === report.id}
+                          onClick={() => void retryClassification(report)}
+                        >
+                          {retryingReportId === report.id ? "Retrying..." : "Retry AI"}
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
