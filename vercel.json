@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/issues/escalate",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
