@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       .eq("is_admin", true)
       .eq("dept", "senior");
     if (seniorError) throw seniorError;
+    const seniorAdminId = seniorAdmins?.[0]?.id ?? null;
 
     let escalatedCount = 0;
     for (const issue of overdueIssues ?? []) {
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
         .from("issues")
         .update({
           status: "Escalated",
+          assigned_admin_id: seniorAdminId,
           escalated_at: now,
           updated_at: now,
           status_changed_at: now,
