@@ -18,13 +18,32 @@ type AdminIssue = {
   issue_reports: { count: number }[];
 };
 
+type AdminNotification = {
+  id: string;
+  message: string;
+  created_at: string;
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const [issues, setIssues] = useState<AdminIssue[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [actionTaken, setActionTaken] = useState<Record<string, string>>({});
   const [loadingIssue, setLoadingIssue] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function loadNotifications(userId: string) {
+    const { data, error: notificationsError } = await supabase
+      .from("notifications")
+      .select("id, message, created_at")
+      .eq("recipient_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (notificationsError) setError(notificationsError.message);
+    else setNotifications((data ?? []) as AdminNotification[]);
+  }
 
   async function loadIssues() {
     const { data: userData } = await supabase.auth.getUser();
@@ -53,6 +72,7 @@ export default function AdminPage() {
     let channel: ReturnType<typeof supabase.channel> | undefined;
     void supabase.auth.getUser().then(({ data: userData }) => {
       if (!userData.user) return;
+      void loadNotifications(userData.user.id);
       channel = supabase
         .channel(`admin-notifications-${userData.user.id}-${crypto.randomUUID()}`)
         .on(
@@ -63,7 +83,12 @@ export default function AdminPage() {
             table: "notifications",
             filter: `recipient_user_id=eq.${userData.user.id}`,
           },
-          () => {
+          (payload) => {
+            const notification = payload.new as AdminNotification;
+            setNotifications((current) => [
+              notification,
+              ...current.filter((item) => item.id !== notification.id),
+            ].slice(0, 5));
             void loadIssues();
           }
         )
@@ -114,6 +139,16 @@ export default function AdminPage() {
       {isLoading && <p className="text-muted-foreground">Loading assigned issues...</p>}
       {!isLoading && !error && issues.length === 0 && (
         <Card><CardContent className="pt-6">No assigned issues.</CardContent></Card>
+      )}
+      {notifications.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {notifications.map((notification) => (
+              <p key={notification.id} className="text-sm">{notification.message}</p>
+            ))}
+          </CardContent>
+        </Card>
       )}
       <div className="grid gap-4">
         {issues.map((issue) => (
