@@ -1,43 +1,90 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+type LedgerIssue = {
+  id: string;
+  created_at: string;
+  title: string;
+  description: string;
+  department: string | null;
+  status: string;
+  report_count: number;
+};
 
 export default function LedgerPage() {
-    return (
-        <div className="mt-8">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-2xl">Public Ledger</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>ID</TableHead>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Status</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow>
-                                <TableCell>Oct 24, 2026</TableCell>
-                                <TableCell>C001</TableCell>
-                                <TableCell className="font-medium">Hostel Wi-Fi Down</TableCell>
-                                <TableCell>No internet connection in CV Raman.</TableCell>
-                                <TableCell>Filed</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell>Oct 23, 2026</TableCell>
-                                <TableCell>C002</TableCell>
-                                <TableCell className="font-medium">Study room AC</TableCell>
-                                <TableCell>study room ac not working.</TableCell>
-                                <TableCell>Assigned</TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-        </div>
-    );
+  const [issues, setIssues] = useState<LedgerIssue[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadLedger() {
+      const { data, error: ledgerError } = await supabase
+        .from("public_ledger")
+        .select("id, created_at, title, description, department, status, report_count")
+        .order("created_at", { ascending: false });
+
+      if (ledgerError) {
+        setError(ledgerError.message);
+      } else {
+        setIssues((data ?? []) as LedgerIssue[]);
+      }
+      setIsLoading(false);
+    }
+
+    void loadLedger();
+  }, []);
+
+  return (
+    <div className="mt-8">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">Public Ledger</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <p className="text-muted-foreground">Loading public issues...</p>}
+          {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
+          {!isLoading && !error && issues.length === 0 && (
+            <p className="text-muted-foreground">No issues have been posted yet.</p>
+          )}
+          {!isLoading && !error && issues.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Reports</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {issues.map((issue) => (
+                  <TableRow key={issue.id}>
+                    <TableCell>{new Date(issue.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium">{issue.title}</TableCell>
+                    <TableCell className="whitespace-normal">{issue.description}</TableCell>
+                    <TableCell>{issue.department ?? "Pending"}</TableCell>
+                    <TableCell>{issue.report_count}</TableCell>
+                    <TableCell>{issue.status}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
